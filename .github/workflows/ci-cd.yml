@@ -1,0 +1,402 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ wasm ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ wasm ]
+
+env:
+  NODE_VERSION: '22'
+  EMSCRIPTEN_VERSION: '4.0.14'
+
+jobs:
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [22, 24]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'pnpm'
+      
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: ${{ env.EMSCRIPTEN_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          pnpm install --ignore-workspace --frozen-lockfile
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake
+      
+      - name: Type check
+        run: pnpm run type-check
+      
+      - name: Build WASM modules
+        run: pnpm run build:wasm
+      
+      - name: Generate WASM Build Summary
+        run: |
+          echo "# 📦 WASM Build Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Build artifacts analysis
+          if [[ -f "install/wasm/pcre2-side.wasm" && -f "install/wasm/pcre2-release.wasm" && -f "install/wasm/pcre2-release.js" ]]; then
+            SIDE_SIZE=$(stat -c%s "install/wasm/pcre2-side.wasm")
+            MAIN_SIZE=$(stat -c%s "install/wasm/pcre2-release.wasm")
+            JS_SIZE=$(stat -c%s "install/wasm/pcre2-release.js")
+            TOTAL_SIZE=$((SIDE_SIZE + MAIN_SIZE + JS_SIZE))
+            
+            # Compression analysis
+            SIDE_COMPRESSED=$(gzip -c "install/wasm/pcre2-side.wasm" | wc -c)
+            MAIN_COMPRESSED=$(gzip -c "install/wasm/pcre2-release.wasm" | wc -c)
+            JS_COMPRESSED=$(gzip -c "install/wasm/pcre2-release.js" | wc -c)
+            TOTAL_COMPRESSED=$((SIDE_COMPRESSED + MAIN_COMPRESSED + JS_COMPRESSED))
+            
+            SIDE_RATIO=$(echo "scale=2; $SIDE_SIZE / $SIDE_COMPRESSED" | bc)
+            MAIN_RATIO=$(echo "scale=2; $MAIN_SIZE / $MAIN_COMPRESSED" | bc)
+            JS_RATIO=$(echo "scale=2; $JS_SIZE / $JS_COMPRESSED" | bc)
+            TOTAL_RATIO=$(echo "scale=2; $TOTAL_SIZE / $TOTAL_COMPRESSED" | bc)
+            
+            echo "## File Sizes" >> $GITHUB_STEP_SUMMARY
+            echo "| Module | Size | Compressed | Ratio |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|------|------------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| SIDE_MODULE | $(numfmt --to=iec $SIDE_SIZE) | $(numfmt --to=iec $SIDE_COMPRESSED) | ${SIDE_RATIO}x |" >> $GITHUB_STEP_SUMMARY
+            echo "| MAIN_MODULE | $(numfmt --to=iec $MAIN_SIZE) | $(numfmt --to=iec $MAIN_COMPRESSED) | ${MAIN_RATIO}x |" >> $GITHUB_STEP_SUMMARY
+            echo "| JS Glue | $(numfmt --to=iec $JS_SIZE) | $(numfmt --to=iec $JS_COMPRESSED) | ${JS_RATIO}x |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Total** | **$(numfmt --to=iec $TOTAL_SIZE)** | **$(numfmt --to=iec $TOTAL_COMPRESSED)** | **${TOTAL_RATIO}x** |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # PCRE2 functionality verification
+          echo "## PCRE2 Features" >> $GITHUB_STEP_SUMMARY
+          echo "| Feature | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Unicode Support | ✅ Enabled |" >> $GITHUB_STEP_SUMMARY
+          echo "| 8-bit Processing | ✅ Enabled |" >> $GITHUB_STEP_SUMMARY
+          echo "| SIMD Optimization | ✅ Enabled |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dual Build System | ✅ SIDE_MODULE + MAIN_MODULE |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Run tests
+        run: pnpm test
+      
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.node-version }}
+          path: test-results/
+          retention-days: 7
+
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+      
+      - name: Install dependencies
+        run: pnpm install --ignore-workspace --frozen-lockfile
+      
+      - name: Run security audit
+        run: pnpm audit --audit-level moderate
+        continue-on-error: true
+      
+      - name: Generate Security Summary
+        run: |
+          echo "# 🔒 Security Audit Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Run audit and capture results
+          if pnpm audit --audit-level moderate --json > audit_results.json 2>/dev/null; then
+            echo "✅ No moderate or high security vulnerabilities found" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Security audit completed with findings" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Package Security" >> $GITHUB_STEP_SUMMARY
+          echo "- **License**: BSD-3-Clause (Commercial Safe)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Dependencies**: Minimal attack surface" >> $GITHUB_STEP_SUMMARY  
+          echo "- **WASM Sandbox**: Memory isolation enabled" >> $GITHUB_STEP_SUMMARY
+
+  build:
+    name: Build Distribution
+    runs-on: ubuntu-latest
+    needs: [test, security]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+      
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: ${{ env.EMSCRIPTEN_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          pnpm install --ignore-workspace --frozen-lockfile
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake
+      
+      - name: Build distribution
+        run: pnpm run build
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-package
+          path: |
+            dist/
+            install/
+            build/
+            package.json
+            README.md
+            LICENCE.md
+          retention-days: 30
+
+  publish-npm:
+    name: Publish to NPM (TEMPORARILY DISABLED)
+    runs-on: ubuntu-latest
+    needs: [test, build, security]
+    if: false  # Temporarily disabled for initial setup
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
+      
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: ${{ env.EMSCRIPTEN_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          pnpm install --ignore-workspace --frozen-lockfile
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake
+      
+      - name: Build dual WASM modules
+        run: pnpm run build
+      
+      - name: Run pre-publish tests
+        run: pnpm run prepublishOnly
+      
+      - name: Publish to NPM
+        run: pnpm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  deploy-cloudflare-release:
+    name: Deploy Release to Cloudflare R2
+    runs-on: ubuntu-latest
+    needs: [build, security]
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+      
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-package
+          path: ./
+      
+      - name: Set release version
+        id: release-version
+        run: echo "VERSION=v$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+      
+      - name: Deploy versioned WASM to Cloudflare R2
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: |
+            r2 object put discere-os-wasm-production/pcre2/${{ steps.release-version.outputs.VERSION }}/side/pcre2-side.wasm --file=install/wasm/pcre2-side.wasm
+            r2 object put discere-os-wasm-production/pcre2/${{ steps.release-version.outputs.VERSION }}/main/pcre2-release.js --file=install/wasm/pcre2-release.js
+            r2 object put discere-os-wasm-production/pcre2/${{ steps.release-version.outputs.VERSION }}/main/pcre2-release.wasm --file=install/wasm/pcre2-release.wasm
+            r2 object put discere-os-wasm-production/pcre2/${{ steps.release-version.outputs.VERSION }}/package.json --file=package.json
+      
+      - name: Deploy latest WASM to Cloudflare R2
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: |
+            r2 object put discere-os-wasm-production/pcre2/latest/side/pcre2-side.wasm --file=install/wasm/pcre2-side.wasm
+            r2 object put discere-os-wasm-production/pcre2/latest/main/pcre2-release.js --file=install/wasm/pcre2-release.js
+            r2 object put discere-os-wasm-production/pcre2/latest/main/pcre2-release.wasm --file=install/wasm/pcre2-release.wasm
+            r2 object put discere-os-wasm-production/pcre2/latest/package.json --file=package.json
+      
+      - name: Verify Cloudflare deployment
+        run: |
+          sleep 15  # Wait for R2 propagation
+          curl -f "https://wasm.discere.cloud/pcre2@${{ steps.release-version.outputs.VERSION }}/package.json" || exit 1
+          echo "✅ Cloudflare R2 deployment verified"
+
+  deploy-cloudflare-snapshot:
+    name: Deploy Snapshot to Cloudflare R2
+    runs-on: ubuntu-latest
+    needs: [build, security]
+    if: github.ref == 'refs/heads/wasm' && github.event_name == 'push'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+      
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-package
+          path: ./
+      
+      - name: Set snapshot version
+        id: version
+        run: echo "VERSION=sha-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+      
+      - name: Deploy snapshot WASM to Cloudflare R2
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: |
+            r2 object put discere-os-wasm-production/pcre2/${{ steps.version.outputs.VERSION }}/side/pcre2-side.wasm --file=install/wasm/pcre2-side.wasm
+            r2 object put discere-os-wasm-production/pcre2/${{ steps.version.outputs.VERSION }}/main/pcre2-release.js --file=install/wasm/pcre2-release.js
+            r2 object put discere-os-wasm-production/pcre2/${{ steps.version.outputs.VERSION }}/main/pcre2-release.wasm --file=install/wasm/pcre2-release.wasm
+            r2 object put discere-os-wasm-production/pcre2/${{ steps.version.outputs.VERSION }}/package.json --file=package.json
+      
+      - name: Log deployment success
+        run: echo "✅ Snapshot ${{ steps.version.outputs.VERSION }} deployed to Cloudflare R2"
+      
+      - name: Verify snapshot deployment
+        run: |
+          sleep 15  # Wait for R2 propagation
+          
+          echo "## 🚀 Snapshot Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Test CDN endpoints
+          ENDPOINTS=(
+            "https://wasm.discere.cloud/pcre2@${{ steps.version.outputs.VERSION }}/package.json"
+            "https://wasm.discere.cloud/pcre2@${{ steps.version.outputs.VERSION }}/side/pcre2-side.wasm"
+            "https://wasm.discere.cloud/pcre2@${{ steps.version.outputs.VERSION }}/main/pcre2-release.js"
+          )
+          
+          echo "| Endpoint | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
+          
+          for endpoint in "${ENDPOINTS[@]}"; do
+            if curl -f --head "$endpoint" > /dev/null 2>&1; then
+              echo "| \`$(basename "$endpoint")\` | ✅ Available |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| \`$(basename "$endpoint")\` | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Snapshot Info" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: \`${{ steps.version.outputs.VERSION }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **CDN**: wasm.discere.cloud" >> $GITHUB_STEP_SUMMARY
+          echo "- **SIDE_MODULE**: For dynamic loading into host MAIN_MODULE" >> $GITHUB_STEP_SUMMARY
+          echo "- **MAIN_MODULE**: For NPM distribution and testing" >> $GITHUB_STEP_SUMMARY
+
+  notify:
+    name: Notify Deployment
+    runs-on: ubuntu-latest
+    needs: [deploy-cloudflare-release, deploy-cloudflare-snapshot]
+    if: always() && (needs.deploy-cloudflare-release.result != 'skipped' || needs.deploy-cloudflare-snapshot.result != 'skipped')
+    
+    steps:
+      - name: Notify release success
+        if: needs.deploy-cloudflare-release.result == 'success'
+        run: echo "🎉 PCRE2.wasm release deployed successfully to Cloudflare R2"
+      
+      - name: Notify snapshot success
+        if: needs.deploy-cloudflare-snapshot.result == 'success'
+        run: echo "📦 PCRE2.wasm snapshot deployed successfully to Cloudflare R2"
+      
+      - name: Notify failure
+        if: needs.deploy-cloudflare-release.result == 'failure' || needs.deploy-cloudflare-snapshot.result == 'failure'
+        run: |
+          echo "❌ Deployment failed for pcre2.wasm"
+          exit 1

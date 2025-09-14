@@ -112,4 +112,35 @@ zig-out/
 zig-cache/
 .zig-cache/
 
+# WASM build artifacts
+build*/
+dist/
+*.wasm
+*.js.mem
+*.js.symbols
+*.js.temp
+node_modules/
+package-lock.json
+yarn.lock
+
+# WASM-specific temporary files
+*.wast
+*.wat
+benchmark-report-*.json
+benchmark_results.json
+wasm-backup.json
+test-results/
+
+# Legacy build scripts
+benchmark-test.cjs
+benchmark-simd.cjs
+
+# CI/CD artifacts
+wasm/build-logs/
+wasm/emsdk/
+wasm/emsdk_env.sh
+
+install/
+node_modules/
+
 # End

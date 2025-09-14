@@ -1,0 +1,68 @@
+{
+  "name": "@discere-os/pcre2.wasm",
+  "version": "10.44.0",
+  "description": "High-performance PCRE2 regular expression library with SIMD optimizations and TypeScript-first API",
+  "exports": {
+    ".": "./src/lib/index.ts",
+    "./types": "./src/lib/types.ts",
+    "./side": "./install/wasm/pcre2-side.wasm",
+    "./main": "./install/wasm/pcre2-release.js",
+    "./fallback": "./install/wasm/pcre2-fallback.js"
+  },
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.14",
+    "@std/testing": "jsr:@std/testing@^1.0.0",
+    "@std/encoding": "jsr:@std/encoding@^1.0.5",
+    "module": "data:application/javascript,export const createRequire = (url) => (id) => { if (id === 'path') return { dirname: (p) => p.split('/').slice(0, -1).join('/') || '/', join: (...args) => args.filter(a => a).join('/'), isAbsolute: (p) => p.startsWith('/'), resolve: (...args) => args.filter(a => a).join('/') }; if (id === 'url') return { fileURLToPath: (url) => url.replace('file://', '') }; if (id === 'fs') return { readFileSync: (path, enc) => { throw new Error('fs not supported'); } }; throw new Error(`Module ${id} not found`); }; export default { createRequire };",
+    "path": "data:application/javascript,export const dirname = (p) => p.split('/').slice(0, -1).join('/') || '/'; export const join = (...args) => args.filter(a => a).join('/'); export const isAbsolute = (p) => p.startsWith('/'); export const resolve = (...args) => args.filter(a => a).join('/'); export default { dirname, join, isAbsolute, resolve };",
+    "url": "data:application/javascript,export const fileURLToPath = (url) => url.replace('file://', ''); export default { fileURLToPath };",
+    "fs": "data:application/javascript,export const readFileSync = (path, encoding) => { throw new Error('fs not supported'); }; export default { readFileSync };",
+    "process": "data:application/javascript,export const platform = 'browser'; export const versions = {}; export default { platform, versions };"
+  },
+  "tasks": {
+    "demo": "deno run --allow-read --allow-write demo-deno.ts",
+    "test": "deno test --allow-read --allow-write --no-check tests/deno/",
+    "test:basic": "deno test --allow-read --allow-write --no-check tests/deno/basic.test.ts",
+    "test:simd": "deno test --allow-read --allow-write --no-check tests/deno/simd.test.ts",
+    "test:unicode": "deno test --allow-read --allow-write --no-check tests/deno/unicode.test.ts",
+    "benchmark": "deno run --allow-read --allow-write bench/regex.bench.ts",
+    "benchmark:simd": "deno run --allow-read --allow-write bench/simd.bench.ts",
+    "build": "deno task build:wasm",
+    "build:wasm": "./build-dual.sh all",
+    "build:side": "./build-dual.sh side",
+    "build:main": "./build-dual.sh main",
+    "build:npm": "deno run --allow-all _build_npm.ts",
+    "build:all": "deno task build:wasm && deno task build:npm",
+    "publish:npm": "deno task build:all && cd npm && npm publish",
+    "publish:dry": "deno task build:all && cd npm && npm publish --dry-run",
+    "clean": "./build-dual.sh clean && rm -rf dist/ build/ install/ npm/ && echo '✅ Cleaned all build artifacts'",
+    "check": "deno check src/lib/index.ts",
+    "check:all": "deno check src/lib/index.ts && deno check demo-deno.ts && deno check bench/regex.bench.ts && deno check _build_npm.ts"
+  },
+  "compilerOptions": {
+    "lib": ["deno.ns", "dom", "es2022", "deno.unstable"],
+    "strict": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+    "exactOptionalPropertyTypes": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
+  },
+  "fmt": {
+    "include": ["src/", "tests/", "demo-deno.ts", "bench/", "scripts/"],
+    "exclude": ["dist/", "build*/", "install/", "npm/", "node_modules/"]
+  },
+  "lint": {
+    "include": ["src/", "tests/", "demo-deno.ts", "bench/", "scripts/"],
+    "exclude": ["dist/", "build*/", "install/", "npm/", "node_modules/"]
+  },
+  "test": {
+    "include": ["tests/deno/"],
+    "exclude": ["tests/unit/", "node_modules/"]
+  }
+}
