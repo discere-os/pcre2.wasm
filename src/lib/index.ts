@@ -76,8 +76,76 @@ export class PCRE2 {
       // Detect optimal module for environment
       const modulePath = this.selectOptimalModule(options);
 
+      // For Deno environment, use dynamic import with file paths
+      if (typeof globalThis.Deno !== 'undefined') {
+        // Read the file and evaluate it to get the PCRE2Module function
+        const moduleCode = await Deno.readTextFile(modulePath);
+
+        // Create polyfills for Node.js globals
+        const mockGlobals = {
+          require: (id: string) => {
+            if (id === 'fs') {
+              return {
+                readFileSync: () => { throw new Error('fs not supported'); }
+              };
+            }
+            throw new Error(`Module ${id} not found`);
+          },
+          process: {
+            versions: {},
+            type: 'browser',
+            argv: [],
+            exitCode: 0
+          },
+          __filename: modulePath,
+          __dirname: modulePath.split('/').slice(0, -1).join('/'),
+          exports: {},
+          module: { exports: {} }
+        };
+
+        // Create a function that evaluates the module code with polyfills
+        const evalModule = new Function(
+          'require', 'process', '__filename', '__dirname', 'exports', 'module', 'define',
+          moduleCode + '; return PCRE2Module;'
+        );
+
+        const PCRE2Module = evalModule(
+          mockGlobals.require,
+          mockGlobals.process,
+          mockGlobals.__filename,
+          mockGlobals.__dirname,
+          mockGlobals.exports,
+          mockGlobals.module,
+          undefined
+        );
+
+        if (typeof PCRE2Module !== 'function') {
+          throw new Error('Failed to extract PCRE2Module factory function');
+        }
+
+        // Load the WASM binary manually for Deno
+        const wasmPath = modulePath.replace(/\.js$/, '.wasm');
+        let wasmBinary: ArrayBuffer | undefined;
+
+        try {
+          const wasmBuffer = await Deno.readFile(wasmPath);
+          wasmBinary = wasmBuffer.buffer;
+        } catch {
+          // WASM binary not found, let module handle it
+        }
+
+        this.module = await PCRE2Module({
+          wasmBinary,
+          locateFile: (path: string) => {
+            if (path.endsWith('.wasm')) {
+              return wasmPath;
+            }
+            return path;
+          }
+        });
+      }
       // For Node.js, use a different approach for Emscripten modules
-      if (typeof process !== 'undefined' && process.versions?.node) {
+      else if (typeof process !== 'undefined' && process.versions?.node) {
         // Use dynamic require and evaluate in proper context
         const { createRequire } = await import('module');
         const fs = await import('fs');
@@ -270,6 +338,16 @@ export class PCRE2 {
 
     const capabilities = this.getSystemCapabilities();
     const variant = options.variant || 'release';
+
+    // For Deno environment, use file URLs
+    if (typeof globalThis.Deno !== 'undefined') {
+      const basePath = new URL('../../install/wasm/', import.meta.url).pathname;
+      if (capabilities.wasmSimd) {
+        return basePath + 'pcre2-release.js'; // SIMD-optimized release build
+      } else {
+        return basePath + 'pcre2-fallback.js'; // Compatibility fallback
+      }
+    }
 
     // For Node.js environment, use relative paths for require()
     const isNode = typeof process !== 'undefined' && process.versions?.node;
