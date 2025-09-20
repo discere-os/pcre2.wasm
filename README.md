@@ -1,8 +1,12 @@
-# @discere-os/pcre2.wasm - High-Performance Regular Expressions for WebAssembly
+# @discere-os/pcre2.wasm
 
-[![CI/CD Pipeline](https://github.com/discere-os/pcre2.wasm/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/discere-os/pcre2.wasm/actions/workflows/ci-cd.yml)
-[![NPM Version](https://img.shields.io/npm/v/@discere-os/pcre2.wasm)](https://www.npmjs.com/package/@discere-os/pcre2.wasm)
-[![License](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
+WebAssembly port of PCRE2 - High-performance regular expression library with Unicode support and SIMD optimization.
+
+[![CI/CD](https://github.com/discere-os/discere-nucleus/actions/workflows/pcre2-wasm-ci.yml/badge.svg)](https://github.com/discere-os/discere-nucleus/actions)
+[![JSR](https://jsr.io/badges/@discere-os/pcre2.wasm)](https://jsr.io/@discere-os/pcre2.wasm)
+[![npm version](https://badge.fury.io/js/@discere-os%2Fpcre2.wasm.svg)](https://badge.fury.io/js/@discere-os%2Fpcre2.wasm)
+[![License](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](COPYING)
+[![Status](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/discere-os/discere-nucleus)
 
 A WebAssembly fork of the industry-standard PCRE2 regular expression library, featuring SIMD optimizations and a TypeScript API.
 
