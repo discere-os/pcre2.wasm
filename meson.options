@@ -1,0 +1,4 @@
+option('main_module', type: 'boolean', value: false, description: 'Build MAIN module (self-contained JS+WASM)')
+option('side_module', type: 'boolean', value: false, description: 'Build SIDE module (true SIDE_MODULE=2 .wasm for dlopen)')
+option('simd', type: 'boolean', value: true, description: 'Enable WASM SIMD optimizations (-msimd128)')
+option('exports', type: 'string', value: 'exports.json', description: 'Path to EXPORTED_FUNCTIONS JSON for MAIN module')

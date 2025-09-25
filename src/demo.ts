@@ -14,7 +14,10 @@ async function runDemo() {
     // Check capabilities
     const capabilities = pcre2.getSystemCapabilities()
     console.log(`📊 SIMD Support: ${capabilities.wasmSimd ? '✅' : '❌'}`)
-    console.log(`📊 Build Variant: ${capabilities.wasmSimd ? 'SIMD-optimized' : 'Fallback'}\n`)
+    if (!capabilities.wasmSimd) {
+      throw new Error('WASM SIMD is required. Use Chrome/Edge 113+ with SIMD enabled.')
+    }
+    console.log(`📊 Build Variant: SIMD-optimized\n`)
 
     // Demo 1: Simple pattern matching
     console.log('📝 Demo 1: Email validation')

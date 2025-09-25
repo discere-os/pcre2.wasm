@@ -1,0 +1,36 @@
+[
+  "_pcre2_compile_8",
+  "_pcre2_match_8",
+  "_pcre2_code_free_8",
+  "_pcre2_match_data_create_from_pattern_8",
+  "_pcre2_match_data_free_8",
+  "_pcre2_get_ovector_pointer_8",
+  "_pcre2_pattern_info_8",
+  "_pcre2_substitute_8",
+  "_pcre2_get_error_message_8",
+
+  "_pcre2_wasm_compile",
+  "_pcre2_wasm_match",
+  "_pcre2_wasm_match_data_create",
+  "_pcre2_wasm_get_ovector",
+  "_pcre2_wasm_substitute",
+  "_pcre2_wasm_pattern_info",
+  "_pcre2_wasm_get_error_message",
+  "_pcre2_wasm_code_free",
+  "_pcre2_wasm_match_data_free",
+  "_pcre2_wasm_version",
+  "_pcre2_wasm_unicode_version",
+  "_pcre2_wasm_jit_available",
+  "_pcre2_wasm_simple_match",
+
+  "_pcre2_wasm_simd_find_char_8",
+  "_pcre2_wasm_simd_find_newline_8",
+  "_pcre2_wasm_simd_substring_search_8",
+  "_pcre2_wasm_simd_boyer_moore_search",
+  "_pcre2_wasm_simd_memchr",
+  "_pcre2_wasm_simd_memcmp",
+  "_pcre2_wasm_simd_supported",
+
+  "_malloc",
+  "_free"
+]

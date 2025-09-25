@@ -13,11 +13,10 @@ Deno.test("SIMD Performance Validation", async (t) => {
   await t.step("should leverage SIMD for character search", () => {
     const capabilities = pcre2.getSystemCapabilities()
 
-    if (capabilities.wasmSimd) {
-      console.log("✅ WASM SIMD detected - testing optimized paths")
-    } else {
-      console.log("⚠️  WASM SIMD not available - using scalar fallback")
+    if (!capabilities.wasmSimd) {
+      throw new Error('WASM SIMD is required for this library. Use Chrome/Edge 113+ with SIMD enabled.')
     }
+    console.log("✅ WASM SIMD detected - testing optimized paths")
 
     // Test patterns that benefit from SIMD optimizations
     const searchPatterns = [

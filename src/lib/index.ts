@@ -337,16 +337,14 @@ export class PCRE2 {
     }
 
     const capabilities = this.getSystemCapabilities();
-    const variant = options.variant || 'release';
 
     // For Deno environment, use file URLs
     if (typeof globalThis.Deno !== 'undefined') {
       const basePath = new URL('../../install/wasm/', import.meta.url).pathname;
-      if (capabilities.wasmSimd) {
-        return basePath + 'pcre2-release.js'; // SIMD-optimized release build
-      } else {
-        return basePath + 'pcre2-fallback.js'; // Compatibility fallback
+      if (!capabilities.wasmSimd) {
+        throw new Error('WASM SIMD is required. Use Chrome/Edge 113+ with SIMD enabled.');
       }
+      return basePath + 'pcre2-main.js';
     }
 
     // For Node.js environment, use relative paths for require()
@@ -355,19 +353,17 @@ export class PCRE2 {
     if (isNode) {
       const basePath = '../../install/wasm/'; // Go up from dist/lib/ to root
       // Select based on capabilities and preferences
-      if (capabilities.wasmSimd) {
-        return basePath + 'pcre2-release.js'; // SIMD-optimized release build
-      } else {
-        return basePath + 'pcre2-fallback.js'; // Compatibility fallback
+      if (!capabilities.wasmSimd) {
+        throw new Error('WASM SIMD is required. Use Chrome/Edge 113+ with SIMD enabled.');
       }
+      return basePath + 'pcre2-main.js';
     } else {
       // For browser environments, use URL resolution
       const basePath = new URL('../../install/wasm/', import.meta.url).href;
-      if (capabilities.wasmSimd) {
-        return basePath + 'pcre2-release.js'; // SIMD-optimized release build
-      } else {
-        return basePath + 'pcre2-fallback.js'; // Compatibility fallback
+      if (!capabilities.wasmSimd) {
+        throw new Error('WASM SIMD is required. Use Chrome/Edge 113+ with SIMD enabled.');
       }
+      return basePath + 'pcre2-main.js';
     }
   }
 

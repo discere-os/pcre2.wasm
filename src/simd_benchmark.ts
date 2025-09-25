@@ -45,7 +45,7 @@ class SIMDBenchmark {
     console.log(`💾 Available Memory: ${capabilities.availableMemory ? Math.round(capabilities.availableMemory / (1024 * 1024)) + 'MB' : 'Unknown'}`)
 
     if (!capabilities.wasmSimd) {
-      console.log('❌ SIMD not available - benchmark results will show fallback performance')
+      throw new Error('WASM SIMD is required. Please run in Chrome/Edge 113+ with SIMD enabled.')
     }
   }
 

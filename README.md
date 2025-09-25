@@ -17,7 +17,7 @@ A WebAssembly fork of the industry-standard PCRE2 regular expression library, fe
 - 📘 **TypeScript Support** - Complete type definitions and modern JavaScript API
 - 🌐 **Universal Compatibility** - Works in browsers and Node.js environments
 - 🔧 **Dual Build System** - SIDE_MODULE for dynamic linking + MAIN_MODULE for standalone usage
-- 📦 **Lightweight** - Optimized bundle sizes with multiple variants
+- 📦 **Lightweight** - Optimized bundle sizes
 
 ## 🚀 Quick Start
 
@@ -100,7 +100,6 @@ Initialize the WASM module.
 **Options:**
 - `modulePath?: string` - Custom path to WASM module
 - `enableMetrics?: boolean` - Enable performance metrics collection
-- `variant?: 'release' | 'optimized' | 'simd'` - Preferred build variant
 
 #### `compile(pattern: string, options?: CompileOptions): CompiledPattern`
 Compile a regular expression pattern.
@@ -218,46 +217,23 @@ Benchmarks conducted on **Chrome 113+** with WebAssembly SIMD enabled:
 - **Methodology**: 100-1000 iterations per test, averaged results
 - **Memory**: Optimized alignment for 16-byte SIMD operations
 
-## 🏗️ Build Variants
+## 🏗️ Build Targets
 
-PCRE2.wasm provides three build variants:
+PCRE2.wasm provides two build targets:
 
-### SIMD-Optimized Build (Recommended)
-- **Size**: 132KB WASM + 16KB JS = **148KB total**
-- **Performance**: **2-11x faster** on SIMD-capable browsers
-- **Features**: Full WebAssembly SIMD optimization suite
-- **Compatibility**: Chrome 91+, Edge 91+, Firefox 89+ (with flag), Safari 14.1+
-- **Use Case**: High-performance applications requiring maximum speed
+### MAIN Module (Recommended)
+- **Artifact**: `install/wasm/pcre2-main.js` + `pcre2-main.wasm`
+- **Performance**: WebAssembly SIMD required; optimized for Chrome/Edge 113+
+- **Use Case**: Deno demos/tests and npm/jsr distribution
 
-### Fallback Build (Compatibility)
-- **Size**: 118KB WASM + 36KB JS = **154KB total**
-- **Performance**: Standard performance with graceful degradation
-- **Features**: Complete PCRE2 functionality without SIMD
-- **Compatibility**: All WebAssembly-capable browsers (Chrome 57+, Firefox 52+, Safari 11+)
-- **Use Case**: Maximum compatibility across all browsers
-
-### Side Module (Dynamic Linking)
+### SIDE Module (Dynamic Linking)
 - **Size**: **169KB WASM** (standalone)
 - **Performance**: SIMD-optimized with dynamic loading capability
 - **Features**: Designed for `dlopen()` integration
 - **Compatibility**: Requires SIMD-capable browsers + main module host
 - **Use Case**: Integration with larger WebAssembly applications
 
-#### Automatic Variant Selection
-
-The library automatically selects the optimal variant:
-
-```javascript
-import PCRE2 from '@discere-os/pcre2.wasm'
-
-const pcre2 = new PCRE2()
-await pcre2.initialize() // Automatically selects SIMD or fallback
-
-// Check which variant was loaded
-const capabilities = pcre2.getSystemCapabilities()
-console.log(`Using ${capabilities.wasmSimd ? 'SIMD' : 'fallback'} build`)
-console.log(`Expected speedup: ${capabilities.wasmSimd ? '2-11x' : '1x (baseline)'}`)
-```
+SIMD required: This library fails fast if WebAssembly SIMD is unavailable. Use Chrome/Edge 113+ (or Node with WASM SIMD) and ensure SIMD is enabled.
 
 ## 🔗 Integration
 
@@ -276,6 +252,25 @@ const logPattern = pcre2.compile('\\[(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})
 const results = logPattern.execAll(logFileContent)
 
 console.log(`Found ${results.length} log entries`)
+```
+
+## 🔨 Building with Meson
+
+```bash
+# MAIN
+meson setup build-main --cross-file=scripts/emscripten.cross -Dmain_module=true -Dside_module=false -Dsimd=true --prefix=$PWD/install -Dlibdir=wasm -Dbindir=wasm
+meson compile -C build-main
+meson install -C build-main
+
+# SIDE
+meson setup build-side --cross-file=scripts/emscripten.cross -Dmain_module=false -Dside_module=true -Dsimd=true --prefix=$PWD/install -Dlibdir=wasm -Dbindir=wasm
+meson compile -C build-side
+meson install -C build-side
+
+# Deno tasks
+deno task build:main:meson
+deno task build:side:meson
+deno task build:wasm:meson
 ```
 
 ## 🧪 Testing
@@ -317,7 +312,7 @@ All optimizations are validated with rigorous testing:
 
 ```bash
 # Build all SIMD variants
-./build-dual.sh all    # Build SIMD, fallback, and side module
+deno task build:wasm:meson    # Build MAIN and SIDE modules via Meson
 
 # Run comprehensive validation
 ./test-functionality.cjs      # Verify API functionality

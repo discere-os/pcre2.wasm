@@ -15,36 +15,30 @@ interface BenchmarkConfiguration {
 
 interface BenchmarkResult {
   name: string
-  optimizedTime: number
-  fallbackTime: number
-  speedup: number
+  timeMs: number
   opsPerSec: number
-  accuracy: boolean
 }
 
 class PCRE2Benchmark {
   private pcre2: PCRE2
-  private fallbackPcre2: PCRE2
 
   constructor() {
     this.pcre2 = new PCRE2()
-    this.fallbackPcre2 = new PCRE2()
   }
 
   async initialize(): Promise<void> {
     console.log('📊 PCRE2.wasm Performance Benchmarks')
     console.log('====================================')
 
-    // Initialize optimized version (release build includes SIMD)
-    await this.pcre2.initialize({ variant: 'release' })
+    // Initialize module (SIMD required)
+    await this.pcre2.initialize()
     console.log('✅ PCRE2 optimized module loaded')
 
-    // Initialize fallback version
-    await this.fallbackPcre2.initialize({ variant: 'optimized' })
-    console.log('✅ PCRE2 fallback module loaded')
-
     const capabilities = this.pcre2.getSystemCapabilities()
-    console.log(`⚡ SIMD Support: ${capabilities.wasmSimd ? 'YES' : 'NO'}`)
+    if (!capabilities.wasmSimd) {
+      throw new Error('WASM SIMD is required. Use Chrome/Edge 113+ with SIMD enabled.')
+    }
+    console.log(`⚡ SIMD Support: YES`)
     console.log(`🖥️ Platform: ${capabilities.platform}`)
   }
 
@@ -76,36 +70,18 @@ class PCRE2Benchmark {
     // Warm up
     for (let i = 0; i < 3; i++) {
       this.pcre2.test(pattern, testData)
-      this.fallbackPcre2.test(pattern, testData)
     }
 
-    // Benchmark optimized version
-    const optimizedStart = performance.now()
-    let optimizedMatches = 0
+    const start = performance.now()
     for (let i = 0; i < iterations; i++) {
-      if (this.pcre2.test(pattern, testData)) {
-        optimizedMatches++
-      }
+      this.pcre2.test(pattern, testData)
     }
-    const optimizedTime = performance.now() - optimizedStart
-
-    // Benchmark fallback version
-    const fallbackStart = performance.now()
-    let fallbackMatches = 0
-    for (let i = 0; i < iterations; i++) {
-      if (this.fallbackPcre2.test(pattern, testData)) {
-        fallbackMatches++
-      }
-    }
-    const fallbackTime = performance.now() - fallbackStart
+    const timeMs = performance.now() - start
 
     return {
       name,
-      optimizedTime,
-      fallbackTime,
-      speedup: fallbackTime / optimizedTime,
-      opsPerSec: Math.round((iterations * 1000) / optimizedTime),
-      accuracy: optimizedMatches === fallbackMatches
+      timeMs,
+      opsPerSec: Math.round((iterations * 1000) / timeMs)
     }
   }
 
@@ -167,10 +143,7 @@ class PCRE2Benchmark {
       const result = await this.runBenchmark(config)
       results.push(result)
 
-      console.log(`  Optimized: ${result.opsPerSec.toLocaleString()} ops/sec (${result.optimizedTime.toFixed(1)}ms)`)
-      console.log(`  Fallback:  ${Math.round((config.iterations * 1000) / result.fallbackTime).toLocaleString()} ops/sec (${result.fallbackTime.toFixed(1)}ms)`)
-      console.log(`  Speedup:   ${result.speedup.toFixed(2)}x faster (optimized vs fallback)`)
-      console.log(`  Accuracy:  ${result.accuracy ? '✅ Identical results' : '❌ Results differ'} (${config.iterations.toLocaleString()} iterations)`)
+      console.log(`  Throughput: ${result.opsPerSec.toLocaleString()} ops/sec (${result.timeMs.toFixed(1)}ms)`)
       console.log('')
     }
 
@@ -183,21 +156,13 @@ class PCRE2Benchmark {
   printSummary(results: BenchmarkResult[]): void {
     console.log('🎯 Performance Summary:')
 
-    const avgSpeedup = results.reduce((sum, r) => sum + r.speedup, 0) / results.length
-    const maxSpeedup = Math.max(...results.map(r => r.speedup))
-    const minSpeedup = Math.min(...results.map(r => r.speedup))
-    const allAccurate = results.every(r => r.accuracy)
+    const avgOps = results.reduce((sum, r) => sum + r.opsPerSec, 0) / results.length
+    const maxOps = Math.max(...results.map(r => r.opsPerSec))
+    const minOps = Math.min(...results.map(r => r.opsPerSec))
 
-    console.log(`  Average speedup: ${avgSpeedup.toFixed(2)}x`)
-    console.log(`  Maximum speedup: ${maxSpeedup.toFixed(2)}x`)
-    console.log(`  Minimum speedup: ${minSpeedup.toFixed(2)}x`)
-    console.log(`  Accuracy: ${allAccurate ? '✅ 100%' : '❌ Issues found'}`)
-
-    // File size comparison
-    console.log('\n🎯 File Size Comparison:')
-    console.log('  Optimized: 132KB WASM + 16KB JS = 148KB total')
-    console.log('  Fallback:  118KB WASM + 36KB JS = 154KB total')
-    console.log('  SIDE_MODULE: 169KB WASM')
+    console.log(`  Average throughput: ${avgOps.toLocaleString()} ops/sec`)
+    console.log(`  Maximum throughput: ${maxOps.toLocaleString()} ops/sec`)
+    console.log(`  Minimum throughput: ${minOps.toLocaleString()} ops/sec`)
 
     console.log('\n🎉 PCRE2.wasm benchmark verification completed!')
   }
