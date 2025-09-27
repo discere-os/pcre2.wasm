@@ -1,5 +1,5 @@
 # Public .gitignore file for PCRE2
-
+/.emscripten_cache/
 build/
 build-*/
 

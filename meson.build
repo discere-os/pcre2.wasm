@@ -7,7 +7,7 @@ project(
 
 simd_opt = get_option('simd')
 
-incs = include_directories('src', '.', meson.project_source_root())
+incs = include_directories('.', 'src')
 
 common_c_args = [
   '-DPCRE2_CODE_UNIT_WIDTH=8',
@@ -52,6 +52,7 @@ sources_core = files(
   'src/pcre2_substring.c',
   'src/pcre2_tables.c',
   'src/pcre2_ucd.c',
+  'src/pcre2_valid_utf.c',
   'src/pcre2_xclass.c',
 )
 
